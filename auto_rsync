@@ -1,0 +1,237 @@
+#!/bin/bash
+# You got this script from: https://github.com/tweekmonster/auto_rsync
+sound_file="/System/Library/Sounds/Tink.aiff"
+fswatch="/usr/local/bin/fswatch"
+launch_agents="$HOME/Library/LaunchAgents"
+watch_exclude=(
+    '\.git'
+    '\.pyc'
+    '\.pyo'
+)
+
+log_enable=0
+unload=0
+user="$USER"
+remote=""
+name=""
+watch_dir=""
+rsync_exclude=(
+    '*.pyc'
+    '*.pyo'
+)
+monitor=0
+
+bail() {
+    >&2 echo "$1"
+    exit "${2:-1}"
+}
+
+log() {
+    [[ $log_enable -eq 1 ]] && echo $*
+}
+
+yn() {
+    read -n 1 -p "$1" -r choice
+
+    if [[ -z "$choice" && -n "$2" ]]; then
+        return $2
+    fi
+
+    case $choice in
+        y|Y)
+            return 0
+            ;;
+        n|N)
+            return 1
+            ;;
+        *)
+            echo ""
+            yn "$1" "$2"
+            return $?
+            ;;
+    esac
+
+    return 1
+}
+
+make_fswatch_cmd() {
+    local fswatch_cmd="$fswatch --batch-marker -x"
+    for a in ${watch_exclude[@]} ; do
+        fswatch_cmd="$fswatch_cmd -e \"$a\""
+    done
+    fswatch_cmd="$fswatch_cmd \"$watch_dir\""
+    echo "$fswatch_cmd"
+}
+
+make_rsync_cmd() {
+    IFS=$'\n'
+    local rsync_flags="--delete"
+
+    for a in $(find "$watch_dir" -d -iname ".git"); do
+        rsync_flags="$rsync_flags --exclude \"${a#$watch_dir}\""
+    done
+
+    for a in ${rsync_exclude[@]}; do
+        rsync_flags="$rsync_flags --exclude \"$a\""
+    done
+
+    local rsync_cmd="/usr/bin/rsync -aie \"ssh -l ${user}\" $rsync_flags \"${watch_dir}/\" \"${remote}\""
+    echo "$rsync_cmd"
+}
+
+do_monitor() {
+    IFS=$'\n'
+    fswatch_cmd=$(make_fswatch_cmd)
+    rsync_cmd=$(make_rsync_cmd)
+
+    eval $fswatch_cmd | while read event; do
+        if [[ "$event" == "NoOp" ]]; then
+            rsync_changes=$(eval $rsync_cmd)
+            log "rsync changes:"
+            make_noise=0
+            for change in $rsync_changes; do
+                log "$change"
+                if [[ $change == \<* || $change == \*deleting* ]]; then
+                    make_noise=1
+                fi
+            done
+
+            if [[ $make_noise -eq 1 && -n "$sound_file" ]]; then
+                log "Making some noise to celebrate"
+                afplay "$sound_file"
+            fi
+        else
+            log "Event: $event"
+        fi
+    done
+
+    exit 0
+}
+
+do_help() {
+    cat <<EOF
+Create a launchctl process that watches a directory and runs rsync when files
+have changed. Without the --monitor flag, a launch agent will be created in
+~/Library/LaunchAgents/ and loaded immediately.
+
+The agent plist file is overwritten if one exists.
+
+Options:
+
+-n          (Required) Name for this agent. It will be labeled:
+            "io.esdf.auto_rsync.<name>"
+-u          Alternate login user if "$USER" is not the remote login user.
+-r          The remote SSH destination, like server.com:/home/whatever/butts
+-w          The directory to watch. A slash is always appended to this!
+-i          rsync --exclude options (repeatable)
+-l          Enable log file output for the launch agent. You will probably need
+            to escape globbing characters.
+--unload    Disable and unload the named agent. The plist will not be deleted,
+            but this script will not unset the Disabled flag. Them's the breaks.
+--monitor   Begin monitoring.  Do not use this directly. Or do. I don't care.
+EOF
+    exit 0
+}
+
+[[ -n "$TMUX" || -n "$STY" ]] && bail "launchctl doesn't work well in tmux/screen"
+[[ ! -e "$fswatch" ]] && bail "Run before using this: brew install fswatch"
+
+while [[ $# > 0 ]]; do
+    case $1 in
+        -h|--help)
+            do_help
+            ;;
+        -n)
+            name="$2"
+            ;;
+        -u)
+            user="$2"
+            ;;
+        -r)
+            remote="$2"
+            ;;
+        -w)
+            watch_dir="${2%%+(/)}"
+            ;;
+        -i)
+            rsync_exclude+=("$2")
+            ;;
+        -l)
+            log_enable=1
+            ;;
+        --unload)
+            unload=1
+            ;;
+        --monitor)
+            monitor=1
+            ;;
+    esac
+    shift
+done
+
+[[ -z "$name" ]] && bail "A name is required"
+
+service="io.esdf.auto_rsync.${name}"
+plist="$HOME/Library/LaunchAgents/${service}.plist"
+
+[[ $monitor -eq 1 ]] && do_monitor
+
+if [[ $unload -eq 1 ]]; then
+    defaults write "$plist" Disabled -bool YES
+    launchctl unload -F "$plist"
+    exit 0
+fi
+
+# Create LaunchAgent and start from here
+stdout="$HOME/Library/Logs/${service}.log"
+stderr="$HOME/Library/Logs/${service}.err.log"
+
+echo "plist: $plist"
+echo "watching: $watch_dir"
+
+if [[ $log_enable -eq 1 ]]; then
+    echo "stdout: $stdout"
+    echo "stderr: $stderr"
+fi
+
+echo "fswatch command: $(make_fswatch_cmd)"
+echo "rsync command: $(make_rsync_cmd)"
+echo ""
+
+yn "This look good? [y/N] " 1
+[[ $? -ne 0 ]] && bail $'\nFINE'
+echo ""
+
+rm -f "$plist"
+defaults write "$plist" Label -string "$service"
+defaults write "$plist" Disabled -bool NO
+defaults write "$plist" RunAtLoad -bool YES
+defaults write "$plist" ProgramArguments -array-add "${BASH_SOURCE[0]}"
+defaults write "$plist" ProgramArguments -array-add "-n"
+defaults write "$plist" ProgramArguments -array-add "$name"
+defaults write "$plist" ProgramArguments -array-add "-r"
+defaults write "$plist" ProgramArguments -array-add "$remote"
+
+defaults write "$plist" ProgramArguments -array-add "-w"
+defaults write "$plist" ProgramArguments -array-add "$watch_dir"
+
+for a in ${rsync_exclude[@]}; do
+    defaults write "$plist" ProgramArguments -array-add "-i"
+    defaults write "$plist" ProgramArguments -array-add "$a"
+done
+
+defaults write "$plist" ProgramArguments -array-add "--monitor"
+
+if [[ $log_enable -eq 1 ]]; then
+    defaults write "$plist" ProgramArguments -array-add "-l"
+    defaults write "$plist" StandardOutPath -string "$stdout"
+    defaults write "$plist" StandardErrorPath -string "$stderr"
+fi
+
+launchctl unload "$plist" &>/dev/null
+launchctl load "$plist"
+
+echo "Done"
+echo ""
+
+echo "To disable this run: ${BASH_SOURCE[0]} -n $name --unload"
