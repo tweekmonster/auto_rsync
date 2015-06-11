@@ -7,6 +7,7 @@ watch_exclude=(
     '\.git'
     '\.pyc'
     '\.pyo'
+    '\.DS_Store'
 )
 
 log_enable=0
@@ -18,6 +19,7 @@ watch_dir=""
 rsync_exclude=(
     '*.pyc'
     '*.pyo'
+    '*.DS_Store*'
 )
 monitor=0
 
