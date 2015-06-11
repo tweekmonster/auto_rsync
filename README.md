@@ -16,7 +16,7 @@ Reasons you would want to use this:
 
 ## Installation
 
-- Install [fswatch](https://github.com/emcrisostomo/fswatch)
+- Install [fswatch](https://github.com/emcrisostomo/fswatch#getting-fswatch)
 - Put the `auto_rsync` script somewhere in your `$PATH`.
 
 ## Usage
