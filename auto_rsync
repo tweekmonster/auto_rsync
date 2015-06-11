@@ -213,6 +213,8 @@ defaults write "$plist" ProgramArguments -array-add "-n"
 defaults write "$plist" ProgramArguments -array-add "$name"
 defaults write "$plist" ProgramArguments -array-add "-r"
 defaults write "$plist" ProgramArguments -array-add "$remote"
+defaults write "$plist" ProgramArguments -array-add "-u"
+defaults write "$plist" ProgramArguments -array-add "$user"
 
 defaults write "$plist" ProgramArguments -array-add "-w"
 defaults write "$plist" ProgramArguments -array-add "$watch_dir"
