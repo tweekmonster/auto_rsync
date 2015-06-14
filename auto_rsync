@@ -1,6 +1,7 @@
 #!/bin/bash
 # You got this script from: https://github.com/tweekmonster/auto_rsync
-sound_file="/System/Library/Sounds/Tink.aiff"
+success_sound="/System/Library/Sounds/Tink.aiff"
+error_sound="/System/Library/Sounds/Sosumi.aiff"
 fswatch="/usr/local/bin/fswatch"
 launch_agents="$HOME/Library/LaunchAgents"
 watch_exclude=(
@@ -29,7 +30,13 @@ bail() {
 }
 
 log() {
-    [[ $log_enable -eq 1 ]] && echo $*
+    if [[ $log_enable -eq 1 ]]; then
+        if [[ $2 -eq 1 ]]; then
+            >&2 echo $1
+        else
+            echo $1
+        fi
+    fi
 }
 
 yn() {
@@ -85,22 +92,35 @@ do_monitor() {
     IFS=$'\n'
     fswatch_cmd=$(make_fswatch_cmd)
     rsync_cmd=$(make_rsync_cmd)
+    rsync_err=$(mktemp -t rsync_err)
 
     eval $fswatch_cmd | while read event; do
         if [[ "$event" == "NoOp" ]]; then
-            rsync_changes=$(eval $rsync_cmd)
-            log "rsync changes:"
+            rsync_changes=$(eval $rsync_cmd 2> $rsync_err)
             make_noise=0
-            for change in $rsync_changes; do
-                log "$change"
-                if [[ $change == \<* || $change == \*deleting* ]]; then
-                    make_noise=1
-                fi
-            done
+            
+            err=$(cat $rsync_err)
+            if [[ -n "$err" ]]; then
+                for e in $err; do
+                    log "$e" 1
+                done
+                make_noise=2
+            else
+                log "rsync changes:"
+                for change in $rsync_changes; do
+                    log "$change"
+                    if [[ $change == \<* || $change == \*deleting* ]]; then
+                        make_noise=1
+                    fi
+                done
+            fi
 
-            if [[ $make_noise -eq 1 && -n "$sound_file" ]]; then
+            if [[ $make_noise -eq 2 ]]; then
+                log "Making some sad noise"
+                afplay "$error_sound"
+            elif [[ $make_noise -eq 1 && -n "$success_sound" ]]; then
                 log "Making some noise to celebrate"
-                afplay "$sound_file"
+                afplay "$success_sound"
             fi
         else
             log "Event: $event"
