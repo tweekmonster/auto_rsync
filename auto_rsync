@@ -30,12 +30,10 @@ bail() {
 }
 
 log() {
-    if [[ $log_enable -eq 1 ]]; then
-        if [[ $2 -eq 1 ]]; then
-            >&2 echo $1
-        else
-            echo $1
-        fi
+    if [[ $2 -eq 1 ]]; then
+        >&2 echo $1
+    elif [[ $log_enable -eq 1 ]]; then
+        echo $1
     fi
 }
 
@@ -214,8 +212,9 @@ echo "watching: $watch_dir"
 
 if [[ $log_enable -eq 1 ]]; then
     echo "stdout: $stdout"
-    echo "stderr: $stderr"
 fi
+
+echo "stderr: $stderr"
 
 echo "fswatch command: $(make_fswatch_cmd)"
 echo "rsync command: $(make_rsync_cmd)"
@@ -250,8 +249,9 @@ defaults write "$plist" ProgramArguments -array-add "--monitor"
 if [[ $log_enable -eq 1 ]]; then
     defaults write "$plist" ProgramArguments -array-add "-l"
     defaults write "$plist" StandardOutPath -string "$stdout"
-    defaults write "$plist" StandardErrorPath -string "$stderr"
 fi
+
+defaults write "$plist" StandardErrorPath -string "$stderr"
 
 launchctl unload "$plist" &>/dev/null
 launchctl load "$plist"
