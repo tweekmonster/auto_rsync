@@ -93,6 +93,7 @@ do_monitor() {
     fswatch_cmd=$(make_fswatch_cmd)
     rsync_cmd=$(make_rsync_cmd)
     rsync_err=$(mktemp -t rsync_err)
+    trap "rm -f '$rsync_err'" EXIT
 
     eval $fswatch_cmd | while read event; do
         if [[ "$event" == "NoOp" ]]; then
