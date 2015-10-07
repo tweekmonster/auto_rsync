@@ -144,6 +144,7 @@ Options:
 -u          Alternate login user if "$USER" is not the remote login user.
 -r          The remote SSH destination, like server.com:/home/whatever/butts
 -w          The directory to watch. A slash is always appended to this!
+-wi         Patterns for fswatch to ignore.  Defaults: *.pyc, *.pyo, *.DS_Store
 -i          rsync --exclude options (repeatable)
 -l          Enable log file output for the launch agent. You will probably need
             to escape globbing characters.
@@ -173,6 +174,9 @@ while [[ $# > 0 ]]; do
             ;;
         -w)
             watch_dir="${2%%+(/)}"
+            ;;
+        -wi)
+            watch_exclude+=("$2")
             ;;
         -i)
             rsync_exclude+=("$2")
@@ -238,6 +242,11 @@ defaults write "$plist" ProgramArguments -array-add "$user"
 
 defaults write "$plist" ProgramArguments -array-add "-w"
 defaults write "$plist" ProgramArguments -array-add "$watch_dir"
+
+for a in ${watch_exclude[@]}; do
+    defaults write "$plist" ProgramArguments -array-add "-wi"
+    defaults write "$plist" ProgramArguments -array-add "$a"
+done
 
 for a in ${rsync_exclude[@]}; do
     defaults write "$plist" ProgramArguments -array-add "-i"
