@@ -38,9 +38,6 @@ noise. Try to make the most out of it.
   Agent. It will be stored in `~/Library/LaunchAgents`. If you rename, move, or
   delete the auto_rsync script, the magic will disappear and all that will be
   left is a pile of error messages.
-- You may need to modify the script if you have specific exclusions for fswatch
-  since you can't add them from the command line. It already has exclusions for
-  python cache files and git.
 - auto_rsync will automatically exclude `.git` from being sync'd to the server.
   You shouldn't be making commits from the remote which will be overwritten
   anyways.
