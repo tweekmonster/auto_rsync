@@ -22,6 +22,7 @@ rsync_exclude=(
     '*.pyo'
     '*.DS_Store*'
 )
+latency=""
 monitor=0
 
 bail() {
@@ -63,6 +64,9 @@ yn() {
 
 make_fswatch_cmd() {
     local fswatch_cmd="$fswatch --batch-marker -x"
+    if [[ $latency != "" ]]; then
+        fswatch_cmd="$fswatch_cmd -l $latency"
+    fi
     for a in ${watch_exclude[@]} ; do
         fswatch_cmd="$fswatch_cmd -e \"$a\""
     done
@@ -148,6 +152,8 @@ Options:
 -i          rsync --exclude options (repeatable)
 -l          Enable log file output for the launch agent. You will probably need
             to escape globbing characters.
+-s          Latency of monitoring by fswatch, in seconds.
+            Default: fswatch default latency
 --unload    Disable and unload the named agent. The plist will not be deleted,
             but this script will not unset the Disabled flag. Them's the breaks.
 --monitor   Begin monitoring.  Do not use this directly. Or do. I don't care.
@@ -183,6 +189,9 @@ while [[ $# > 0 ]]; do
             ;;
         -l)
             log_enable=1
+            ;;
+        -s)
+            latency="$2"
             ;;
         --unload)
             unload=1
@@ -242,6 +251,11 @@ defaults write "$plist" ProgramArguments -array-add "$user"
 
 defaults write "$plist" ProgramArguments -array-add "-w"
 defaults write "$plist" ProgramArguments -array-add "$watch_dir"
+
+if [[ $latency != "" ]]; then
+    defaults write "$plist" ProgramArguments -array-add "-s"
+    defaults write "$plist" ProgramArguments -array-add "$latency"
+fi
 
 for a in ${watch_exclude[@]}; do
     defaults write "$plist" ProgramArguments -array-add "-wi"
