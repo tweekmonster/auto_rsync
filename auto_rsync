@@ -23,6 +23,7 @@ rsync_exclude=(
     '*.DS_Store*'
 )
 latency=""
+allow_from_gitignore=0
 monitor=0
 
 bail() {
@@ -74,6 +75,26 @@ make_fswatch_cmd() {
     echo "$fswatch_cmd"
 }
 
+gitignore_excludes() {
+    local exclude_phrase=""
+    if [[ $allow_from_gitignore -eq 0 ]]; then
+        git_top_level=$(cd $watch_dir; git rev-parse --show-toplevel 2> /dev/null)
+        # git command exists and watch directory is in a git repo
+        if [[ $? -eq 0 ]]; then
+            local gitignores=(
+                "$git_top_level/.gitignore"
+                "$HOME/.gitignore_global"
+            )
+            for f in ${gitignores[@]}; do
+                if [[ -e "$f" ]]; then
+                    exclude_phrase="$exclude_phrase --exclude-from $f"
+                fi
+            done
+        fi
+    fi
+    echo "$exclude_phrase"
+}
+
 make_rsync_cmd() {
     IFS=$'\n'
     local rsync_flags="--delete"
@@ -85,6 +106,9 @@ make_rsync_cmd() {
     for a in ${rsync_exclude[@]}; do
         rsync_flags="$rsync_flags --exclude \"$a\""
     done
+
+    gitignore=$(gitignore_excludes)
+    rsync_flags="$rsync_flags $gitignore"
 
     local rsync_cmd="/usr/bin/rsync -aie \"ssh -l ${user}\" $rsync_flags \"${watch_dir}/\" \"${remote}\""
     echo "$rsync_cmd"
@@ -154,6 +178,8 @@ Options:
             to escape globbing characters.
 -s          Latency of monitoring by fswatch, in seconds.
             Default: fswatch default latency
+-g          Allow gitignore'd files in transfer.  Default: if watch directory is
+            in a git repo, exclude files listed in local and global gitignores.
 --unload    Disable and unload the named agent. The plist will not be deleted,
             but this script will not unset the Disabled flag. Them's the breaks.
 --monitor   Begin monitoring.  Do not use this directly. Or do. I don't care.
@@ -192,6 +218,9 @@ while [[ $# > 0 ]]; do
             ;;
         -s)
             latency="$2"
+            ;;
+        -g)
+            allow_from_gitignore=1
             ;;
         --unload)
             unload=1
@@ -272,6 +301,10 @@ defaults write "$plist" ProgramArguments -array-add "--monitor"
 if [[ $log_enable -eq 1 ]]; then
     defaults write "$plist" ProgramArguments -array-add "-l"
     defaults write "$plist" StandardOutPath -string "$stdout"
+fi
+
+if [[ $allow_from_gitignore -eq 1 ]]; then
+    defaults write "$plist" ProgramArguments -array-add "-g"
 fi
 
 defaults write "$plist" StandardErrorPath -string "$stderr"
