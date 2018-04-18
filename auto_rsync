@@ -25,6 +25,7 @@ rsync_exclude=(
 latency=""
 allow_from_gitignore=0
 monitor=0
+additional_rsync_options=()
 
 bail() {
     >&2 echo "$1"
@@ -107,6 +108,10 @@ make_rsync_cmd() {
         rsync_flags="$rsync_flags --exclude \"$a\""
     done
 
+    for a in ${additional_rsync_options[@]}; do
+        rsync_flags="$rsync_flags $a"
+    done
+
     gitignore=$(gitignore_excludes)
     rsync_flags="$rsync_flags $gitignore"
 
@@ -180,6 +185,7 @@ Options:
             Default: fswatch default latency
 -g          Allow gitignore'd files in transfer.  Default: if watch directory is
             in a git repo, exclude files listed in local and global gitignores.
+-o          Additional rsync options (repeatable).  Example: -o --no-p -o --no-t
 --unload    Disable and unload the named agent. The plist will not be deleted,
             but this script will not unset the Disabled flag. Them's the breaks.
 --monitor   Begin monitoring.  Do not use this directly. Or do. I don't care.
@@ -221,6 +227,9 @@ while [[ $# > 0 ]]; do
             ;;
         -g)
             allow_from_gitignore=1
+            ;;
+        -o)
+            additional_rsync_options+=("$2")
             ;;
         --unload)
             unload=1
@@ -293,6 +302,11 @@ done
 
 for a in ${rsync_exclude[@]}; do
     defaults write "$plist" ProgramArguments -array-add "-i"
+    defaults write "$plist" ProgramArguments -array-add "$a"
+done
+
+for a in ${additional_rsync_options[@]}; do
+    defaults write "$plist" ProgramArguments -array-add "-o"
     defaults write "$plist" ProgramArguments -array-add "$a"
 done
 
